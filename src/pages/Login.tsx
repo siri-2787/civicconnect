@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -10,11 +10,22 @@ interface LoginProps {
 }
 
 export function Login({ onNavigate }: LoginProps) {
-  const { signIn } = useAuth();
+  const { signIn, profile } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // 🔹 Redirect AFTER profile loads
+  useEffect(() => {
+    if (!profile) return;
+
+    if (profile.role === 'officer') {
+      onNavigate('officer-dashboard');
+    } else {
+      onNavigate('home');
+    }
+  }, [profile, onNavigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +37,9 @@ export function Login({ onNavigate }: LoginProps) {
     if (error) {
       setError(error.message);
       setLoading(false);
-    } else {
-      onNavigate('home');
     }
+    // ❌ DO NOT navigate here
+    // navigation will happen in useEffect after profile loads
   };
 
   return (

@@ -30,22 +30,32 @@ export function MyIssues({ onNavigate }: MyIssuesProps) {
     if (user) fetchMyIssues();
   }, [user]);
 
-  const fetchMyIssues = async () => {
-    const { data, error } = await supabase
-      .from('issues')
-      .select('*')
-      .eq('created_by', user!.id)
-      .order('created_at', { ascending: false });
+const fetchMyIssues = async () => {
+  const { data, error } = await supabase
+    .from('issues')
+    .select(`
+      id,
+      title,
+      description,
+      category,
+      status,
+      priority_score,
+      location_text,
+      created_at
+    `)
+    .eq('created_by', user!.id)
+    .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error(error);
-      setLoading(false);
-      return;
-    }
-
-    setIssues(data || []);
+  if (error) {
+    console.error(error);
     setLoading(false);
-  };
+    return;
+  }
+
+  setIssues(data || []);
+  setLoading(false);
+};
+
 
   if (!user) {
     return (

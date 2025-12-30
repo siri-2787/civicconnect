@@ -6,21 +6,21 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { MapPin, ThumbsUp, Calendar, User, Search, Filter } from 'lucide-react';
+import { MapPin, ThumbsUp, Calendar, User } from 'lucide-react';
 
 interface Issue {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   category: string;
-  ai_severity: string | null;
-  priority_score: number;
   status: string;
+  priority_score: number;
   location_text: string | null;
   created_at: string;
-  vote_count?: number;
-  user_voted?: boolean;
-  submitter?: { full_name: string };
+  created_by: string;
+  vote_count: number;
+  user_voted: boolean;
+  submitter?: { full_name: string } | null;
 }
 
 interface TrackIssuesProps {
@@ -29,6 +29,7 @@ interface TrackIssuesProps {
 
 export function TrackIssues({ onNavigate }: TrackIssuesProps) {
   const { user } = useAuth();
+
   const [issues, setIssues] = useState<Issue[]>([]);
   const [filteredIssues, setFilteredIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,76 +38,99 @@ export function TrackIssues({ onNavigate }: TrackIssuesProps) {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
+  /* ---------------- FETCH ISSUES ---------------- */
   useEffect(() => {
     fetchIssues();
   }, []);
 
+  const fetchIssues = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from('issues')
+      .select(`
+        id,
+        title,
+        description,
+        category,
+        status,
+        priority_score,
+        location_text,
+        created_at,
+        created_by
+      `)
+      .order('priority_score', { ascending: false });
+
+    if (error) {
+      console.error('Fetch issues error:', error);
+      setLoading(false);
+      return;
+    }
+
+    const enriched: Issue[] = [];
+
+    for (const issue of data || []) {
+      const { count } = await supabase
+        .from('issue_votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('issue_id', issue.id);
+
+      let userVoted = false;
+      if (user) {
+        const { data: vote } = await supabase
+          .from('issue_votes')
+          .select('id')
+          .eq('issue_id', issue.id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        userVoted = !!vote;
+      }
+
+      enriched.push({
+        ...issue,
+        vote_count: count ?? 0,
+        user_voted: userVoted,
+      });
+    }
+
+    setIssues(enriched);
+    setFilteredIssues(enriched);
+    setLoading(false);
+  };
+
+  /* ---------------- FILTER LOGIC ---------------- */
   useEffect(() => {
     let filtered = [...issues];
 
     if (searchTerm) {
-      filtered = filtered.filter(
-        (i) =>
-          i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          i.description.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter((i) =>
+        i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (i.description ?? '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (categoryFilter) {
-      filtered = filtered.filter((i) => i.category === categoryFilter);
+      filtered = filtered.filter(
+        (i) => i.category.toLowerCase() === categoryFilter.toLowerCase()
+      );
     }
 
     if (statusFilter) {
-      filtered = filtered.filter((i) => i.status === statusFilter);
+      filtered = filtered.filter(
+        (i) => i.status.toLowerCase() === statusFilter.toLowerCase()
+      );
     }
 
     setFilteredIssues(filtered);
   }, [searchTerm, categoryFilter, statusFilter, issues]);
 
-  const fetchIssues = async () => {
-    const { data, error } = await supabase
-      .from('issues')
-      .select(`*, submitter:profiles!created_by(full_name)`)
-      .order('priority_score', { ascending: false });
-
-    if (error) {
-      console.error(error);
-      setLoading(false);
+  /* ---------------- VOTING ---------------- */
+  const handleVote = async (issue: Issue) => {
+    if (!user) {
+      onNavigate('login');
       return;
     }
-
-    const withVotes = await Promise.all(
-      (data || []).map(async (issue) => {
-        const { count } = await supabase
-          .from('issue_votes')
-          .select('*', { count: 'exact', head: true })
-          .eq('issue_id', issue.id);
-
-        let userVoted = false;
-        if (user) {
-          const { data: vote } = await supabase
-            .from('issue_votes')
-            .select('id')
-            .eq('issue_id', issue.id)
-            .eq('user_id', user.id)
-            .maybeSingle();
-          userVoted = !!vote;
-        }
-
-        return {
-          ...issue,
-          vote_count: count || 0,
-          user_voted: userVoted,
-        };
-      })
-    );
-
-    setIssues(withVotes);
-    setLoading(false);
-  };
-
-  const handleVote = async (issue: Issue) => {
-    if (!user) return onNavigate('login');
 
     if (issue.user_voted) {
       await supabase
@@ -122,13 +146,14 @@ export function TrackIssues({ onNavigate }: TrackIssuesProps) {
 
       await supabase
         .from('issues')
-        .update({ priority_score: issue.priority_score + 5 })
+        .update({ priority_score: issue.priority_score + 1 })
         .eq('id', issue.id);
     }
 
     fetchIssues();
   };
 
+  /* ---------------- UI ---------------- */
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -141,30 +166,36 @@ export function TrackIssues({ onNavigate }: TrackIssuesProps) {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+
             <Select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
               options={[
                 { value: '', label: 'All Categories' },
                 { value: 'Road', label: 'Road' },
-                { value: 'Sanitation', label: 'Sanitation' },
                 { value: 'Water', label: 'Water' },
+                { value: 'Electricity', label: 'Electricity' },
+                { value: 'Sanitation', label: 'Sanitation' },
               ]}
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
             />
+
             <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
               options={[
                 { value: '', label: 'All Status' },
                 { value: 'open', label: 'Open' },
+                { value: 'in_progress', label: 'In Progress' },
                 { value: 'resolved', label: 'Resolved' },
               ]}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
             />
           </CardContent>
         </Card>
 
         {loading ? (
-          <p>Loading...</p>
+          <p>Loading issues...</p>
+        ) : filteredIssues.length === 0 ? (
+          <p className="text-gray-600">No issues found</p>
         ) : (
           filteredIssues.map((issue) => (
             <Card key={issue.id} className="mb-4">
@@ -173,11 +204,11 @@ export function TrackIssues({ onNavigate }: TrackIssuesProps) {
 
                 <div className="flex gap-2 my-2">
                   <Badge>{issue.category}</Badge>
-                  <Badge>{issue.status.toUpperCase()}</Badge>
+                  <Badge>{issue.status}</Badge>
                   <Badge>Priority: {issue.priority_score}</Badge>
                 </div>
 
-                <p className="mb-3">{issue.description}</p>
+                <p className="mb-3">{issue.description || 'No description provided.'}</p>
 
                 <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
                   {issue.location_text && (
@@ -192,24 +223,14 @@ export function TrackIssues({ onNavigate }: TrackIssuesProps) {
                   </div>
                   <div className="flex items-center">
                     <User className="h-4 w-4 mr-1" />
-                    {issue.submitter?.full_name || 'Anonymous'}
+                    Citizen
                   </div>
                 </div>
 
-                <Button
-  size="sm"
-  onClick={() => handleVote(issue)}
-  className={`flex items-center gap-2 ${
-    issue.user_voted
-      ? 'bg-green-600 text-white hover:bg-green-700'
-      : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-  }`}
->
-  <ThumbsUp className="h-4 w-4" />
-  {issue.user_voted ? 'You are affected' : 'I am affected'}
-  <span className="ml-2 text-sm">({issue.vote_count})</span>
-</Button>
-
+                <Button size="sm" onClick={() => handleVote(issue)}>
+                  <ThumbsUp className="h-4 w-4 mr-2" />
+                  {issue.user_voted ? 'You are affected' : 'I am affected'} ({issue.vote_count})
+                </Button>
               </CardContent>
             </Card>
           ))

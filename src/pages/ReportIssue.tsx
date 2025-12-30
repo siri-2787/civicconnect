@@ -1,3 +1,4 @@
+// ReportIssue.tsx
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -35,14 +36,13 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  /* ---------------- AUTH CHECK ---------------- */
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card>
           <CardContent className="p-6 text-center">
             <AlertCircle className="mx-auto mb-3" />
-            <p className="mb-4">Please login to report an issue</p>
+            <p>Please login to report an issue</p>
             <Button onClick={() => onNavigate('login')}>Login</Button>
           </CardContent>
         </Card>
@@ -50,13 +50,7 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
     );
   }
 
-  /* ---------------- LOCATION ---------------- */
   const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported');
-      return;
-    }
-
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLatitude(pos.coords.latitude);
@@ -69,7 +63,6 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
     );
   };
 
-  /* ---------------- SUBMIT ---------------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -81,21 +74,20 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
       return;
     }
 
-    const { error: insertError } = await supabase.from('issues').insert({
+    const { error } = await supabase.from('issues').insert({
       title,
       description,
       category,
       latitude,
       longitude,
-      location: locationText,
       location_text: locationText,
       created_by: user.id,
       status: 'open',
-      priority: 0,
+      priority_score: 0,
     });
 
-    if (insertError) {
-      setError(insertError.message);
+    if (error) {
+      setError(error.message);
       setLoading(false);
       return;
     }
@@ -104,16 +96,12 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
     setLoading(false);
   };
 
-  /* ---------------- SUCCESS ---------------- */
   if (success) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card>
           <CardContent className="p-6 text-center">
             <h2 className="text-xl font-bold mb-2">✅ Issue Submitted</h2>
-            <p className="mb-4 text-gray-600">
-              Your issue has been successfully reported
-            </p>
             <Button onClick={() => onNavigate('home')}>Go Home</Button>
           </CardContent>
         </Card>
@@ -121,7 +109,6 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
     );
   }
 
-  /* ---------------- UI ---------------- */
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <Card className="max-w-3xl mx-auto">
@@ -139,23 +126,16 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
               onChange={(e) => setCategory(e.target.value)}
             />
 
-            <Input
-              label="Title"
-              placeholder="Short issue title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
+            <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
 
             <Textarea
               label="Description"
-              placeholder="Describe the issue in detail"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
 
             <Button type="button" variant="secondary" onClick={getCurrentLocation}>
-              <MapPin className="mr-2" />
-              Use Current Location
+              <MapPin className="mr-2" /> Use Current Location
             </Button>
 
             <Input
@@ -174,4 +154,3 @@ export function ReportIssue({ onNavigate }: ReportIssueProps) {
     </div>
   );
 }
-

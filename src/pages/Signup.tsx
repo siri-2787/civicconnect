@@ -16,6 +16,7 @@ export function Signup({ onNavigate }: SignupProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<'citizen' | 'officer'>('citizen');
+  const [department, setDepartment] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +36,7 @@ export function Signup({ onNavigate }: SignupProps) {
 
     setLoading(true);
 
-    const { error } = await signUp(email, password, fullName, role);
+    const { error } = await signUp(email, password, fullName, role, department);
 
     if (error) {
       setError(error.message);
@@ -70,66 +71,33 @@ export function Signup({ onNavigate }: SignupProps) {
                 </div>
               )}
 
-              <Input
-                label="Full Name"
-                type="text"
-                placeholder="John Doe"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-
-              <Input
-                label="Email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-
-              <Input
-                label="Password"
-                type="password"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-
-              <Input
-                label="Confirm Password"
-                type="password"
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
+              <Input label="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Input label="Confirm Password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
 
               <label className="block text-gray-700 text-sm font-medium mb-1">Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as 'citizen' | 'officer')}
-                className="w-full border border-gray-300 rounded-md p-2 mb-4"
-              >
+              <select value={role} onChange={(e) => setRole(e.target.value as 'citizen' | 'officer')} className="w-full border border-gray-300 rounded-md p-2 mb-2">
                 <option value="citizen">Citizen</option>
                 <option value="officer">Officer</option>
               </select>
 
+              {role === 'officer' && (
+                <>
+                  <label className="block text-gray-700 text-sm font-medium mb-1">Department</label>
+                  <select value={department} onChange={(e) => setDepartment(e.target.value)} className="w-full border border-gray-300 rounded-md p-2 mb-4">
+                    <option value="">Select Department</option>
+                    <option value="Road">Road</option>
+                    <option value="Water">Water</option>
+                    <option value="Electricity">Electricity</option>
+                    <option value="Sanitation">Sanitation</option>
+                  </select>
+                </>
+              )}
+
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Creating Account...' : 'Create Account'}
               </Button>
-
-              <div className="text-center text-sm text-gray-600">
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => onNavigate('login')}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Sign In
-                </button>
-              </div>
             </form>
           </CardContent>
         </Card>
@@ -137,3 +105,5 @@ export function Signup({ onNavigate }: SignupProps) {
     </div>
   );
 }
+
+
