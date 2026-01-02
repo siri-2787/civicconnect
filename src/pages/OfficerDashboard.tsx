@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -12,7 +14,7 @@ interface Issue {
   category: string;
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   priority_score: number;
-  department: string;
+  department: string | null;
   created_at: string;
   submitter: { full_name: string };
 }
@@ -22,38 +24,9 @@ interface OfficerDashboardProps {
 }
 
 export function OfficerDashboard({ onNavigate }: OfficerDashboardProps) {
-  // Static officer profile for demo
-  const profile = {
-    full_name: 'Demo Officer',
-    role: 'officer' as const,
-    department: 'Road',
-  };
-
-  // Static issues for demo
-  const [issues, setIssues] = useState<Issue[]>([
-    {
-      id: 'demo-1',
-      title: 'Pothole on Main Street',
-      description: 'Large pothole causing traffic issues.',
-      category: 'Road',
-      status: 'open',
-      priority_score: 5,
-      department: 'Road',
-      created_at: new Date().toISOString(),
-      submitter: { full_name: 'John Doe' },
-    },
-    {
-      id: 'demo-2',
-      title: 'Street light not working',
-      description: 'The street light near 5th avenue is not working.',
-      category: 'Road',
-      status: 'in_progress',
-      priority_score: 3,
-      department: 'Road',
-      created_at: new Date().toISOString(),
-      submitter: { full_name: 'Jane Smith' },
-    },
-  ]);
+  const { profile } = useAuth();
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [updateModal, setUpdateModal] = useState({
     show: false,
@@ -61,7 +34,48 @@ export function OfficerDashboard({ onNavigate }: OfficerDashboardProps) {
     status: 'open' as Issue['status'],
   });
 
-  // Calculate stats
+  /* ---------------- FETCH DEPARTMENT ISSUES ---------------- */
+  const fetchDepartmentIssues = async () => {
+    if (!profile) return;
+
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from('issues')
+      .select(`
+        id,
+        title,
+        description,
+        category,
+        status,
+        priority_score,
+        department,
+        created_at,
+        created_by:profiles!created_by(full_name)
+      `)
+      .eq('department', profile.department)
+      .order('priority_score', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching department issues:', error.message);
+      setIssues([]);
+    } else {
+      setIssues(
+        (data as any[]).map((i) => ({
+          ...i,
+          submitter: i.created_by,
+        }))
+      );
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchDepartmentIssues();
+  }, [profile]);
+
+  /* ---------------- CALCULATE STATS ---------------- */
   const stats = {
     pending: issues.filter((i) => i.status === 'open').length,
     inProgress: issues.filter((i) => i.status === 'in_progress').length,
@@ -75,15 +89,26 @@ export function OfficerDashboard({ onNavigate }: OfficerDashboardProps) {
     }).length,
   };
 
-  // Update issue status locally
-  const updateIssueStatus = () => {
-    setIssues((prev) =>
-      prev.map((i) =>
-        i.id === updateModal.issueId ? { ...i, status: updateModal.status } : i
-      )
-    );
+  /* ---------------- UPDATE ISSUE STATUS ---------------- */
+  const updateIssueStatus = async () => {
+    const { error } = await supabase
+      .from('issues')
+      .update({ status: updateModal.status })
+      .eq('id', updateModal.issueId);
+
+    if (error) {
+      console.error('Error updating status:', error.message);
+    } else {
+      fetchDepartmentIssues(); // Refresh issues
+    }
+
     setUpdateModal({ show: false, issueId: '', status: 'open' });
   };
+
+  /* ---------------- UI ---------------- */
+  if (!profile) {
+    return <p>Loading profile...</p>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -107,14 +132,16 @@ export function OfficerDashboard({ onNavigate }: OfficerDashboardProps) {
             <h2 className="text-xl font-semibold">Department Issues</h2>
           </CardHeader>
           <CardContent>
-            {issues.length === 0 ? (
+            {loading ? (
+              <p>Loading issues...</p>
+            ) : issues.length === 0 ? (
               <p>No issues assigned to your department</p>
             ) : (
               issues.map((issue) => (
                 <div key={issue.id} className="border rounded p-4 mb-4">
                   <h3 className="font-semibold text-lg">{issue.title}</h3>
 
-                  <div className="flex gap-2 my-2">
+                  <div className="flex gap-2 my-2 flex-wrap">
                     <Badge>{issue.category}</Badge>
                     <Badge>{issue.status.toUpperCase()}</Badge>
                     <Badge>Priority: {issue.priority_score}</Badge>
@@ -123,7 +150,7 @@ export function OfficerDashboard({ onNavigate }: OfficerDashboardProps) {
                   <p className="text-sm text-gray-600">{issue.description}</p>
 
                   <p className="text-xs text-gray-500 mt-1">
-                    Reported by {issue.submitter.full_name} on{' '}
+                    Reported by {issue.submitter?.full_name ?? 'Unknown'} on{' '}
                     {new Date(issue.created_at).toLocaleDateString()}
                   </p>
 
@@ -189,7 +216,7 @@ export function OfficerDashboard({ onNavigate }: OfficerDashboardProps) {
   );
 }
 
-/* STAT CARD HELPER */
+/* ---------------- STAT CARD ---------------- */
 function StatCard({ title, value, icon }: any) {
   return (
     <Card>
@@ -203,6 +230,7 @@ function StatCard({ title, value, icon }: any) {
     </Card>
   );
 }
+
 
 
 

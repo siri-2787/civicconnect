@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { MapPin, Loader, AlertCircle } from 'lucide-react';
 
+/* ---------------- TYPES ---------------- */
+
 interface NearbyIssue {
   id: string;
   title: string;
@@ -11,8 +13,11 @@ interface NearbyIssue {
   latitude: number;
   longitude: number;
   status: string;
+  photo_url: string | null; // ✅ ADD THIS
   distance_km: number;
 }
+
+/* ---------------- COMPONENT ---------------- */
 
 export default function IssuesNearMe() {
   const [issues, setIssues] = useState<NearbyIssue[]>([]);
@@ -49,7 +54,7 @@ export default function IssuesNearMe() {
     const { data, error } = await supabase.rpc('get_issues_nearby', {
       user_lat: lat,
       user_lng: lng,
-      radius_km: 5, // 🔁 change radius here
+      radius_km: 5,
     });
 
     if (error) {
@@ -60,6 +65,8 @@ export default function IssuesNearMe() {
 
     setLoading(false);
   };
+
+  /* ---------------- UI ---------------- */
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -102,8 +109,19 @@ export default function IssuesNearMe() {
                   {issue.distance_km.toFixed(2)} km away
                 </p>
               </CardHeader>
+
               <CardContent>
-                <p className="text-gray-700 mb-2">{issue.description}</p>
+                <p className="text-gray-700 mb-3">{issue.description}</p>
+
+                {/* ✅ IMAGE DISPLAY */}
+                {issue.photo_url && (
+                  <img
+                    src={issue.photo_url}
+                    alt="Issue"
+                    className="w-full max-h-56 object-cover rounded-lg border mb-3"
+                  />
+                )}
+
                 <span className="inline-block bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">
                   Status: {issue.status}
                 </span>
@@ -115,3 +133,4 @@ export default function IssuesNearMe() {
     </div>
   );
 }
+

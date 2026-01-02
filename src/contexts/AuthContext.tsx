@@ -1,10 +1,5 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  ReactNode,
-} from 'react';
+// contexts/AuthContext.tsx
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -56,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .single();
 
-    if (!error) {
+    if (!error && data) {
       setProfile(data);
     } else {
       console.error('Profile fetch error:', error);
@@ -77,9 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sessionUser = data.session?.user ?? null;
       setUser(sessionUser);
 
-      if (sessionUser) {
-        fetchProfile(sessionUser.id);
-      }
+      if (sessionUser) fetchProfile(sessionUser.id);
 
       setLoading(false);
     });
@@ -114,16 +107,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
-        data: {
-          full_name: fullName,
-          role,
-          department: role === 'officer' ? department ?? null : null,
-        },
+        data: { full_name: fullName, role, department: role === 'officer' ? department : null },
       },
     });
 
     if (!error && data.user) {
-      // Auto login after signup
+      // Insert a row into profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: data.user.id,            // Must match auth.users.id
+          full_name: fullName,
+          role,
+          department: role === 'officer' ? department : null,
+        });
+
+      if (profileError) console.error('Profile insert error:', profileError);
+
+      // Auto-login after signup
       await supabase.auth.signInWithPassword({ email, password });
       await fetchProfile(data.user.id);
     }
@@ -169,4 +170,3 @@ export function useAuth() {
   }
   return context;
 }
-
